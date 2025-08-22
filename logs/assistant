@@ -1,0 +1,59 @@
+# assistant.py
+
+import os
+from tools import get_order_status
+from guardrails import detect_offensive_input
+
+# Create logs folder if not present
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
+def log_event(event: str):
+    """Append log events to a file."""
+    with open("logs/tool_log.txt", "a") as f:
+        f.write(event + "\n")
+
+def run_assistant(user_input: str) -> str:
+    """
+    Main bot function:
+    - Check offensive input
+    - Respond to FAQs
+    - Handle order status requests
+    - Escalate negative or complex queries
+    """
+    if detect_offensive_input(user_input):
+        return "⚠️ Let's keep it respectful. Please rephrase your message."
+
+    lower_input = user_input.lower()
+
+    # FAQ: Return policy
+    if "return policy" in lower_input:
+        return "📦 Our return policy allows returns within 30 days of delivery."
+
+    # FAQ: Shipping time
+    if "shipping time" in lower_input or "delivery time" in lower_input:
+        return "🚚 Shipping typically takes 3–5 business days."
+
+    # Order status request
+    if "order" in lower_input and "status" in lower_input:
+        # Naively extract order ID (digits only)
+        words = user_input.split()
+        order_id = None
+        for word in words:
+            if word.isdigit():
+                order_id = word
+                break
+        if order_id:
+            log_event(f"Tool Invoked: get_order_status with ID {order_id}")
+            return get_order_status(order_id)
+        else:
+            return "Please provide a valid order ID."
+
+    # Detect negative sentiment for escalation
+    if any(word in lower_input for word in ["angry", "upset", "not happy", "complain"]):
+        log_event(f"Handoff triggered due to negative sentiment: {user_input}")
+        return "👤 I’m connecting you to a human agent for further assistance."
+
+    # Default fallback - escalate to human
+    log_event(f"Handoff triggered due to unhandled query: {user_input}")
+    return "🤖 I’m not sure how to help with that. Let me connect you to a human agent."
